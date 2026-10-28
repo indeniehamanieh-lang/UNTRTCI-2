@@ -1,0 +1,67 @@
+name: Construire l'APK Android
+
+on:
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Vérifier la configuration Supabase
+        run: |
+          if grep -q "REMPLACE-MOI" .env.production; then
+            echo "::error::Remplissez .env.production avec l'adresse et la clé de VOTRE projet Supabase."
+            exit 1
+          fi
+          if ! grep -Eq "^VITE_PUBLIC_URL=https://[^ ]+" .env.production; then
+            echo "::error::Renseignez VITE_PUBLIC_URL (adresse https du site web) dans .env.production : elle sert au QR code de la carte et aux e-mails."
+            exit 1
+          fi
+
+      - name: Construire le site
+        run: |
+          npm install
+          npm run build
+
+      - name: Installer Capacitor
+        working-directory: mobile
+        run: npm install
+
+      - name: Créer le projet Android
+        working-directory: mobile
+        run: npx cap add android
+
+      - name: Autoriser l'appareil photo
+        working-directory: mobile
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          sed -i 's#</manifest>#    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n</manifest>#' "$M"
+          grep -n "CAMERA" "$M"
+
+      - name: Générer les icônes
+        working-directory: mobile
+        run: ./scripts/make-icons.sh
+
+      - name: Synchroniser
+        working-directory: mobile
+        run: npx cap sync android
+
+      - name: Compiler l'APK
+        working-directory: mobile/android
+        run: ./gradlew assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: UNTRTCI-Mobile-apk
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
