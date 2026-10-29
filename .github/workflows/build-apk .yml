@@ -18,20 +18,20 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Vérifier la configuration Supabase
+      - name: Préparer la configuration
         run: |
+          if [ ! -f .env.production ]; then cp env.production .env.production; fi
           if grep -q "REMPLACE-MOI" .env.production; then
-            echo "::error::Remplissez .env.production avec l'adresse et la clé de VOTRE projet Supabase."
-            exit 1
-          fi
-          if ! grep -Eq "^VITE_PUBLIC_URL=https://[^ ]+" .env.production; then
-            echo "::error::Renseignez VITE_PUBLIC_URL (adresse https du site web) dans .env.production : elle sert au QR code de la carte et aux e-mails."
+            echo "::error::Ouvrez le fichier env.production sur GitHub et remplacez les deux REMPLACE-MOI par les valeurs de Supabase."
             exit 1
           fi
 
+      - name: Installer ImageMagick
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
+
       - name: Construire le site
         run: |
-          npm install
+          npm install --legacy-peer-deps
           npm run build
 
       - name: Installer Capacitor
@@ -51,7 +51,9 @@ jobs:
 
       - name: Générer les icônes
         working-directory: mobile
-        run: ./scripts/make-icons.sh
+        run: |
+          rm -f android/app/src/main/res/mipmap-*/ic_launcher*.webp android/app/src/main/res/mipmap-*/ic_launcher*.png
+          ./scripts/make-icons.sh
 
       - name: Synchroniser
         working-directory: mobile
